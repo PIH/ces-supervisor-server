@@ -132,31 +132,21 @@ def import_users():
     root.withdraw()
     file_path = filedialog.askopenfilename(initialdir="/home/sup/Descargas")
     print(file_path)
-    #for site in SITES:
-    for site in ['laguna']:
-        _run_sql(site, "DELETE FROM user_role WHERE user_id NOT IN (1,2)")
-        _run_sql(site, "DELETE FROM user_property WHERE user_id NOT IN (1,2)")
-        _run_sql(site, "UPDATE users SET changed_by = 1 WHERE user_id NOT IN (1,2)")
-        _run_sql(site, "UPDATE visit SET creator=1, changed_by=1, voided_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE person_attribute SET creator=1, changed_by=1, voided_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE person SET creator=1, changed_by=1, voided_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE patient SET creator=1, changed_by=1, voided_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE encounter SET creator=1, changed_by=1, voided_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE encounter_provider SET creator=1, changed_by=1, voided_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE patient_identifier SET creator=1, changed_by=1, voided_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE person_address SET creator=1, changed_by=1, voided_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE obs SET creator=1, voided_by=1 WHERE creator NOT IN (1,2) OR voided_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE idgen_log_entry SET generated_by=1 WHERE generated_by NOT IN (1,2);")
-        _run_sql(site, "UPDATE htmlformentry_html_form SET creator=1, changed_by=1, retired_by=1 WHERE creator NOT IN (1,2) OR changed_by NOT IN (1,2) OR retired_by NOT IN (1,2)")
-        _run_sql(site, "UPDATE encounter_provider SET provider_id=1 WHERE provider_id NOT IN (1,2);")
-        _run_sql(site, "DELETE FROM notification_alert_recipient")
-        _run_sql(site, "DELETE FROM notification_alert")
-        _run_sql(site, "DELETE FROM provider WHERE provider_id <> 1")
-        _run_sql(site, "DELETE FROM users WHERE user_id NOT IN (1,2)")
+    for site in SITES:
+        # Import the users
         import_cmd = ("docker exec -i $(docker ps | grep openmrs-sdk-mysql | cut -f1 -d' ') " +
                 "mysql -uopenmrs --password=***REMOVED*** " + site + " <" + file_path)
         sp.check_output(import_cmd, shell=True)
-        _run_sql(site, "INSERT INTO user_role (user_id, role) SELECT u.user_id, r.role FROM users u CROSS JOIN role r WHERE u.user_id NOT IN (1,2)")
+        # Just update the password for the users that already existed
+        _run_sql(site, "UPDATE users INNER JOIN users u ON users.username = u.username AND u.person_id = 1 " +
+                "SET users.password=u.password, users.salt=u.salt")
+        _run_sql(site, "DELETE u1 FROM users u1 JOIN users u2 " +
+                "WHERE u1.username = u2.username AND u1.person_id = 1 AND u1.user_id NOT IN (1,2) AND u1.user_id <> u2.user_id")
+        # Give everyone all the roles
+        _run_sql(site, "INSERT INTO user_role (user_id, role) " +
+                "SELECT u.user_id, r.role FROM users u CROSS JOIN role r " +
+                "WHERE u.user_id NOT IN (1,2) " +
+                "AND (SELECT COUNT(*) FROM user_role WHERE user_id = u.user_id AND role = r.role) = 0")
 
 
 def launch_browser(site):
