@@ -3,13 +3,17 @@
 import subprocess as sp, shlex
 from time import sleep
 import getpass
+import os
 
 import tkinter as tk
 from tkinter import filedialog
 
+from dotenv import load_dotenv
+load_dotenv()
 
 SITES = ["capitan", "honduras", "laguna", "letrero", "matazano",
         "monterrey", "plan", "reforma", "salvador", "soledad"]
+PASSWORD = os.getenv("PASSWORD")
 
 def port_for_site(site):
     return 8000 + SITES.index(site)
@@ -107,13 +111,22 @@ def import_data():
     root.withdraw()
     file_path = filedialog.askopenfilename(initialdir="/media/sup")
     site = _get_selection("A cual EMR quieres importar el archivo {}?".format(file_path), SITES)
-    _run_in_docker("mysql -uopenmrs --password=***REMOVED*** " + site + " <" + file_path)
+    tmp_dir = mkdtemp()
+    unzip_process = sp.Popen("7za e " + file_path +
+            " -p" + PASSWORD +
+            " -o" + tmp_dir,
+            shell=True)
+    unzip_process.wait()
+    load_process = sp.Popen("mysql -u openmrs " +
+            "--password=" + PASSWORD +
+            " -D " + site +
+            " <" + tmp_dir + "/pihemr-archivo.sql")
 
 
 def export_users():
     site = _get_selection("De cual EMR quieres exportar las cuentas?", SITES)
 
-    insert_users = _run_in_docker("mysqldump -uopenmrs -p***REMOVED*** --databases " + site +
+    insert_users = _run_in_docker("mysqldump -uopenmrs -p" + PASSWORD + " --databases " + site +
             " --tables users --where 'user_id NOT IN (1,2)' --no-create-info | " +
             "grep 'INSERT INTO' | " +
             "perl -pe 's/(\(.*?,.*?,.*?,.*?,.*?,.*?,.*?),.*?,/\\1,1,/g' | " +  # fix creator
@@ -135,7 +148,7 @@ def import_users():
     for site in SITES:
         # Import the users
         import_cmd = ("docker exec -i $(docker ps | grep openmrs-sdk-mysql | cut -f1 -d' ') " +
-                "mysql -uopenmrs --password=***REMOVED*** " + site + " <" + file_path)
+                "mysql -uopenmrs --password=" + PASSWORD + " " + site + " <" + file_path)
         sp.check_output(import_cmd, shell=True)
         # Just update the password for the users that already existed
         _run_sql(site, "UPDATE users INNER JOIN users u ON users.username = u.username AND u.person_id = 1 " +
@@ -182,7 +195,7 @@ def _run_in_docker(command):
 
 
 def _run_sql(database, command):
-    mysql_cmd = "mysql -uopenmrs --password=***REMOVED*** -e '" + command + "' " + database
+    mysql_cmd = "mysql -uopenmrs --password=" + PASSWORD + " -e '" + command + "' " + database
     return _run_in_docker(mysql_cmd)
 
 
