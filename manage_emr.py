@@ -4,6 +4,7 @@ import subprocess as sp, shlex
 from time import sleep
 import getpass
 import os
+from tempfile import mkdtemp
 
 import tkinter as tk
 from tkinter import filedialog
@@ -11,6 +12,7 @@ from tkinter import filedialog
 from dotenv import load_dotenv
 load_dotenv()
 
+LAST_IMPORT_DIR = "/media/sup"
 SITES = ["capitan", "honduras", "laguna", "letrero", "matazano",
         "monterrey", "plan", "reforma", "salvador", "soledad"]
 PASSWORD = os.getenv("PASSWORD")
@@ -60,7 +62,9 @@ def run_emr():
     sites_with_running_info = [
             s + (" (activo)" if is_up(s) else "")
             for s in SITES]
-    site = _get_selection("Elegir un EMR de correr.", sites_with_running_info).split(' ')[0].strip()
+    site = _get_selection(
+            "Elegir un EMR de correr, o (0) para regresar.",
+            sites_with_running_info).split(' ')[0].strip()
 
     if not is_up(site):
         start_server(site)
@@ -101,26 +105,38 @@ def stop_server():
             + " | grep -v grep | awk '{print $2}')",
             shell=True)
     process.wait()
-    sleep(1)
+    sleep(2)
     print("Ok, lo maté!")
 
 
 def import_data():
+    global LAST_IMPORT_DIR
     print("Por favor eliges el .sql archivo que quieres importar.")
     root = tk.Tk()
     root.withdraw()
-    file_path = filedialog.askopenfilename(initialdir="/media/sup")
+    file_path = filedialog.askopenfilename(initialdir=LAST_IMPORT_DIR)
+    LAST_IMPORT_DIR = os.path.dirname(file_path)
     site = _get_selection("A cual EMR quieres importar el archivo {}?".format(file_path), SITES)
     tmp_dir = mkdtemp()
-    unzip_process = sp.Popen("7za e " + file_path +
-            " -p" + PASSWORD +
-            " -o" + tmp_dir,
+    print("\n\n=== DECOMPRESSING ===\n")
+    unzip_process = sp.Popen(["7za", "e", file_path,
+            "-p" + PASSWORD,
+            "-o" + tmp_dir])
+    unzip_process.communicate()
+    file_path = tmp_dir + "/pihemr-archivo.sql"
+    print("\n\n=== PREPARING FOR IMPORT ===\n")
+    print("...")
+    fix_process = sp.Popen(
+            "sed -i -E 's/DEFINER=[^]+@[^]+/DEFINER=`openmrs`/g' " + file_path,
             shell=True)
-    unzip_process.wait()
-    load_process = sp.Popen("mysql -u openmrs " +
+    fix_process.communicate()
+    print(sp.check_output("grep 'SQL SECURITY DEFINER' " + file_path, shell=True))
+    print("\n\n=== LOADING INTO DATABSE ===\n")
+    print("This may take a while...")
+    _run_in_docker("mysql -u openmrs " +
             "--password=" + PASSWORD +
             " -D " + site +
-            " <" + tmp_dir + "/pihemr-archivo.sql")
+            " <" + file_path, "-i")
 
 
 def export_users():
@@ -144,17 +160,30 @@ def import_users():
     root = tk.Tk()
     root.withdraw()
     file_path = filedialog.askopenfilename(initialdir="/home/sup/Descargas")
-    print(file_path)
-    for site in SITES:
+    if file_path == "":
+        print("Oups, eso no parece bien. Vamos al inicio.")
+        return
+    site_options = SITES + ["Todos"]
+    site = _get_selection("A cual EMR quieres importar usuarios? (0 para regresar)", site_options)
+    if site == None:
+        return
+    elif site == "Todos":
+        sites = SITES
+    else:
+        sites = [site]
+    for site in sites:
         # Import the users
-        import_cmd = ("docker exec -i $(docker ps | grep openmrs-sdk-mysql | cut -f1 -d' ') " +
-                "mysql -uopenmrs --password=" + PASSWORD + " " + site + " <" + file_path)
-        sp.check_output(import_cmd, shell=True)
+        _run_in_docker(
+                "mysql -uopenmrs --password=" + PASSWORD + " " + site + " <" + file_path,
+                "-i")
         # Just update the password for the users that already existed
         _run_sql(site, "UPDATE users INNER JOIN users u ON users.username = u.username AND u.person_id = 1 " +
                 "SET users.password=u.password, users.salt=u.salt")
         _run_sql(site, "DELETE u1 FROM users u1 JOIN users u2 " +
-                "WHERE u1.username = u2.username AND u1.person_id = 1 AND u1.user_id NOT IN (1,2) AND u1.user_id <> u2.user_id")
+                "WHERE u1.username = u2.username " +
+                "AND u1.person_id = 1 " +
+                "AND u1.user_id NOT IN (1,2) " +
+                "AND u1.user_id <> u2.user_id")
         # Give everyone all the roles
         _run_sql(site, "INSERT INTO user_role (user_id, role) " +
                 "SELECT u.user_id, r.role FROM users u CROSS JOIN role r " +
@@ -168,6 +197,10 @@ def launch_browser(site):
 
 
 def _get_selection(prompt, options):
+    """Prompts the user to select one of the provided options.
+
+    Returns either the selected option, or None if the user enters "0".
+    """
     if not options:
         print("Oups. Disculpa.")
         main_loop()
@@ -180,14 +213,16 @@ def _get_selection(prompt, options):
     while result is None:
         try:
             selection = int(input(selection_prompt))
+            if selection == 0:
+                return None
             result = options[selection - 1]
             return result
         except (ValueError, IndexError) as e:
             print("Oups! Eso no es input valido. Intenta otra vez.")
 
 
-def _run_in_docker(command):
-    docker_cmd = "docker exec $(docker ps | grep openmrs-sdk-mysql | cut -f1 -d' ') " + command
+def _run_in_docker(command, exec_flags=""):
+    docker_cmd = "docker exec " + exec_flags + " $(docker ps | grep openmrs-sdk-mysql | cut -f1 -d' ') " + command
     # print(docker_cmd)
     result = sp.check_output(docker_cmd, shell=True)
     # print(result)
