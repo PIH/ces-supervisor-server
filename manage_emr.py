@@ -36,7 +36,7 @@ def main_loop():
 def main_menu():
     show_running()
     print()
-    options = ["Lanzar un EMR", "Parar un EMR", "Importar datos", "Exportar usuarios", "Importar usuarios"]
+    options = ["Correr un EMR", "Parar un EMR", "Importar datos", "Exportar usuarios", "Importar usuarios"]
     selection = _get_selection("Que quieres hacer?", options)
     if selection == options[0]:
         run_emr()
@@ -73,7 +73,7 @@ def run_emr():
 
 
 def start_server(site):
-    print("Ok, lanzando " + site + "...")
+    print("Ok, corriendo " + site + "...")
 
     command = "mvn openmrs-sdk:run -e --offline -DserverId=" + site
 
@@ -89,7 +89,7 @@ def start_server(site):
             print(output)
             break
         if "Starting ProtocolHandler" in str(line):
-            print("\nEl EMR ha iniciado. Lanzando navegador.")
+            print("\nEl EMR ha iniciado. Corriendo el navegador.")
             break
         elif "is already in use. Would you like to use" in str(line):
             print("\nEMR para " + site + " ya esta corriendo pue!")
@@ -105,7 +105,7 @@ def stop_server():
             + " | grep -v grep | awk '{print $2}')",
             shell=True)
     process.wait()
-    sleep(2)
+    sleep(3)
     print("Ok, lo maté!")
 
 
@@ -118,20 +118,19 @@ def import_data():
     LAST_IMPORT_DIR = os.path.dirname(file_path)
     site = _get_selection("A cual EMR quieres importar el archivo {}?".format(file_path), SITES)
     tmp_dir = mkdtemp()
-    print("\n\n=== DECOMPRESSING ===\n")
+    print("\n\n=== DECOMPRESSANDO ===\n")
     unzip_process = sp.Popen(["7za", "e", file_path,
             "-p" + PASSWORD,
             "-o" + tmp_dir])
     unzip_process.communicate()
     file_path = tmp_dir + "/pihemr-archivo.sql"
-    print("\n\n=== PREPARING FOR IMPORT ===\n")
+    print("\n\n=== PREPARANDO PARA IMPORTAR ===\n")
     print("...")
     fix_process = sp.Popen(
             "sed -i -E 's/DEFINER=[^]+@[^]+/DEFINER=`openmrs`/g' " + file_path,
             shell=True)
     fix_process.communicate()
-    print(sp.check_output("grep 'SQL SECURITY DEFINER' " + file_path, shell=True))
-    print("\n\n=== LOADING INTO DATABSE ===\n")
+    print("\n\n=== CARGANDO AL BASE DE DATOS ===\n")
     print("This may take a while...")
     _run_in_docker("mysql -u openmrs " +
             "--password=" + PASSWORD +
