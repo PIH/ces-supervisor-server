@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 LAST_IMPORT_DIR = "/media/sup"
+LAST_IMPORT_DIR = "~/Documentos"
 SITES = ["capitan", "honduras", "laguna", "letrero", "matazano",
         "monterrey", "plan", "reforma", "salvador", "soledad"]
 PASSWORD = os.getenv("PASSWORD")
@@ -29,8 +30,14 @@ def is_up(site):
 
 
 def main_loop():
-    while True:
-        main_menu()
+    try:
+        while True:
+            main_menu()
+    except Exception as e:
+        print(e)
+        input("\n\nLa programa ha fallado. Por favor revisa el información arriba "
+                "para determinar que pasó.\n\n"
+                "Presiona Enter para cerrar la ventana.")
 
 
 def main_menu():
@@ -52,10 +59,11 @@ def main_menu():
 
 def show_running():
     running_sites = [s for s in SITES if is_up(s)]
-    print("Ya corriendo:\n"
-            + "\n".join(
-                ["{}\t({})".format(s, port_for_site(s)) for s in running_sites]
-            ) + "\n")
+    if running_sites:
+        print("Ya corriendo:\n"
+                + "\n".join(
+                    ["{}\t({})".format(s, port_for_site(s)) for s in running_sites]
+                ) + "\n")
 
 
 def run_emr():
@@ -123,6 +131,7 @@ def import_data():
             "-p" + PASSWORD,
             "-o" + tmp_dir])
     unzip_process.communicate()
+    _check_return_code(unzip_process)
     file_path = tmp_dir + "/pihemr-archivo.sql"
     print("\n\n=== PREPARANDO PARA IMPORTAR ===\n")
     print("...")
@@ -130,6 +139,7 @@ def import_data():
             "sed -i -E 's/DEFINER=[^]+@[^]+/DEFINER=`openmrs`/g' " + file_path,
             shell=True)
     fix_process.communicate()
+    _check_return_code(fix_process)
     print("\n\n=== CARGANDO AL BASE DE DATOS ===\n")
     print("This may take a while...")
     _run_in_docker("mysql -u openmrs " +
@@ -218,6 +228,11 @@ def _get_selection(prompt, options):
             return result
         except (ValueError, IndexError) as e:
             print("Oups! Eso no es input valido. Intenta otra vez.")
+
+
+def _check_return_code(process):
+    if process.returncode != 0:
+        raise Exception("Program exited with return code {}".format(process.returncode))
 
 
 def _run_in_docker(command, exec_flags=""):
