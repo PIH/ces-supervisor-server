@@ -52,6 +52,7 @@ def main_loop():
             "para determinar que pasó.\n\n"
             "Presiona Enter para cerrar la ventana."
         )
+        exit(1)
 
 
 def main_menu():
@@ -204,13 +205,13 @@ def export_users():
         + PASSWORD
         + " --databases "
         + site
-        + " --tables users --where 'user_id NOT IN (1,2)' --no-create-info | "
+        + " --tables users --where 'user_id != 2' --no-create-info | "
         + "grep 'INSERT INTO' | "
-        + "perl -pe 's/(\(.*?,.*?,.*?,.*?,.*?,.*?,.*?),.*?,/\\1,1,/g' | "
-        + "perl -pe 's/(\(.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?),.*?,/\\1,1,/g' | "  # fix creator
-        + "perl -pe 's/(\(.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?),.*?,/\\1,1,/g' | "  # fix changed_by
-        + "perl -pe 's/\(.*?,/(/g' | "  # fix person_id
-        + "sed 's/VALUES/(system_id,username,password,salt,secret_question,secret_answer  ,creator,date_created   ,changed_by     ,date_changed   ,person_id      ,retired        ,retired_by     ,date_retired   ,retire_reason  ,uuid           ,activation_key ,email) VALUES/' "  # remove primary key
+        + "perl -pe 's/(\(.*?,.*?,.*?,.*?,.*?,.*?,.*?),.*?,/\\1,1,/g' | "  # fix creator (set to 1)
+        + "perl -pe 's/(\(.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?),.*?,/\\1,1,/g' | "  # fix changed_by (set to 1)
+        + "perl -pe 's/(\(.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?),.*?,/\\1,1,/g' | "  # fix person_id (set to 1)
+        + "perl -pe 's/\(.*?,/(/g' | "  # remove primary key from data
+        + "sed 's/VALUES/(system_id,username,password,salt,secret_question,secret_answer  ,creator,date_created   ,changed_by     ,date_changed   ,person_id      ,retired        ,retired_by     ,date_retired   ,retire_reason  ,uuid           ,activation_key ,email) VALUES/' "  # remove primary key from header
     )
 
     with open("/home/sup/Descargas/users.sql", "wb") as f:
@@ -242,6 +243,7 @@ def import_users():
             "-i",
         )
         # Just update the password for the users that already existed
+        # (imported users all have person_id = 1)
         _run_sql(
             site,
             "UPDATE users INNER JOIN users u ON users.username = u.username AND u.person_id = 1 "
@@ -249,11 +251,11 @@ def import_users():
         )
         _run_sql(
             site,
-            "DELETE u1 FROM users u1 JOIN users u2 "
+            "DELETE u2 FROM users u1 JOIN users u2 "
             + "WHERE u1.username = u2.username "
-            + "AND u1.person_id = 1 "
-            + "AND u1.user_id NOT IN (1,2) "
-            + "AND u1.user_id <> u2.user_id",
+            + "AND u2.person_id = 1 "
+            + "AND u2.user_id NOT IN (1,2) "
+            + "AND u2.user_id > u1.user_id",
         )
         # Give everyone all the roles
         _run_sql(
@@ -266,7 +268,7 @@ def import_users():
         # Reset login attempts
         _run_sql(
             site,
-            "UPDATE user_property SET property_value = 0 WHERE property = 'loginAttempts'"
+            'UPDATE user_property SET property_value = 0 WHERE property = "loginAttempts"'
         )
 
 
@@ -322,6 +324,7 @@ def _run_in_docker(command, exec_flags=""):
 
 
 def _run_sql(database, command):
+    """ `command` must not have single-quotes. """
     mysql_cmd = (
         "mysql -uopenmrs --password=" + PASSWORD + " -e '" + command + "' " + database
     )
