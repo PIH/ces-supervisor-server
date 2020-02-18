@@ -180,15 +180,17 @@ def import_data():
 
 
 def update_emr():
-    sp.run("cd ../mirebalais-puppet; git pull", shell=True)
-    sp.run("cd ../openmrs-module-mirebalais; git pull", shell=True)
+    base_dir = "/home/sup/pih-emr"
+    sp.run("cd " + base_dir + "/openmrs-config-ces; git pull", shell=True)
+    sp.run("cd " + base_dir + "/openmrs-module-mirebalais; git pull", shell=True)
     for server in SITES:
         sp.run(
-            "cd ../openmrs-module-mirebalais; "
+            "cd " + base_dir + "/openmrs-module-mirebalais; "
             "yes | mvn openmrs-sdk:deploy "
             " -Ddistro=api/src/main/resources/openmrs-distro.properties "
-            " -U -DserverId=" + server
-        , shell=True)
+            " -U -DserverId=" + server,
+            shell=True,
+        )
     print()
     print(
         "Todos los sitios han sido actualizados. "
@@ -266,7 +268,7 @@ def import_users():
         # Reset login attempts
         _run_sql(
             site,
-            "UPDATE user_property SET property_value = 0 WHERE property = 'loginAttempts'"
+            "UPDATE user_property SET property_value = 0 WHERE property = 'loginAttempts'",
         )
 
 
