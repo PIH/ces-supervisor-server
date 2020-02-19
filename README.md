@@ -47,6 +47,7 @@ The steps are as follows.
 1. Copy an existing application data directory (e.g. `~/openmrs/capitan`
   to `~/openmrs/<name>`).
 1. Create a new database `<name>` in the dockerized MySQL.
+1. `GRANT ALL PRIVILEGES ON <name>.* TO 'openmrs'@'localhost';`
 1. Import a database export into that database.
 1. Run the following SQL, replacing `<name>` as appropriate: `UPDATE location_tag_map SET location_id = (SELECT location_id FROM location WHERE name LIKE "<name>") WHERE location_id = 3`
 1. Update the server's port in `~/openmrs/<name>/openmrs-server.properties`
