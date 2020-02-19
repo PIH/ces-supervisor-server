@@ -110,7 +110,7 @@ def run_emr():
 def start_server(site):
     print("Ok, corriendo " + site + "...")
 
-    command = "mvn openmrs-sdk:run -e --offline -DserverId=" + site
+    command = "mvn openmrs-sdk:run -e -DserverId=" + site
 
     process = sp.Popen(command, stdout=sp.PIPE, shell=True)
 
