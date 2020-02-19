@@ -48,6 +48,7 @@ The steps are as follows.
   to `~/openmrs/<name>`).
 1. Create a new database `<name>` in the dockerized MySQL.
 1. `GRANT ALL PRIVILEGES ON <name>.* TO 'openmrs'@'localhost';`
+1. Also `GRANT ALL PRIVILEGES ON <name>.* TO 'openmrs'@'172.%';` to allow PIH MEQ to access. 
 1. Import a database export into that database.
 1. Run the following SQL, replacing `<name>` as appropriate: `UPDATE location_tag_map SET location_id = (SELECT location_id FROM location WHERE name LIKE "<name>") WHERE location_id = 3`
 1. Update the server's port in `~/openmrs/<name>/openmrs-server.properties`
