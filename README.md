@@ -36,3 +36,21 @@ openmrs-config-ces. The tool can update to the application to the latest
 
 Note that importing data also overwrites the existing users. Each time you
 import new data, you will need to re-import users afterward.
+
+### Adding a site
+
+Sites are added not using an SDK install, but by manually copying stuff.
+See the script `~/pih-emr/make-site-dirs.sh` on the server itself.
+The steps are as follows.
+
+1. Pick a name. Letters, numbers, and underscores. We'll refer to it as `<name>`.
+1. Copy an existing application data directory (e.g. `~/openmrs/capitan`
+  to `~/openmrs/<name>`).
+1. Create a new database `<name>` in the dockerized MySQL.
+1. Import a database export into that database.
+1. Run the following SQL, replacing `<name>` as appropriate: `UPDATE location_tag_map SET location_id = (SELECT location_id FROM location WHERE name LIKE "<name>") WHERE location_id = 3`
+1. Update the server's port in `~/openmrs/<name>/openmrs-server.properties`
+  by changing the values of `server.port` and `tomcat.port`. Choose the next
+  available port after all the other servers. It should be
+  `8000 + (number of preexisting servers)`.
+1. Add the server to the `SITES` array in `manage_emr.py`.
